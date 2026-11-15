@@ -1373,15 +1373,24 @@
       globeScene.add(new THREE.Points(starGeo, starMat));
 
       // Lunar sphere with authentic NASA LRO photo map and LOLA displacement (with root + public fallback)
-      const texLoader = new THREE.TextureLoader();
       function loadTexSafe(primary, fallback, cb) {
-        return texLoader.load(primary, () => {
+        const texture = new THREE.Texture();
+        const imgLoader = new THREE.ImageLoader();
+
+        imgLoader.load(primary, img => {
+          texture.image = img;
+          texture.needsUpdate = true;
           if (cb) cb();
         }, undefined, () => {
-          texLoader.load(fallback, () => {
+          console.warn('Primary texture failed (' + primary + '), falling back to: ' + fallback);
+          imgLoader.load(fallback, fbImg => {
+            texture.image = fbImg;
+            texture.needsUpdate = true;
             if (cb) cb();
           });
         });
+
+        return texture;
       }
 
       const colorTex = loadTexSafe('./textures/moon_color_2k.jpg', './public/textures/moon_color_2k.jpg', () => {
@@ -1391,17 +1400,22 @@
         if (globeRenderer && globeScene && globeCamera) globeRenderer.render(globeScene, globeCamera);
       });
 
-      const moonGeo = new THREE.SphereGeometry(1, 96, 96);
+      const moonGeo = new THREE.SphereGeometry(1, 128, 128);
       const moonMat = new THREE.MeshStandardMaterial({
-        color: 0xc8cdd4,
         map: colorTex,
         bumpMap: bumpTex,
-        bumpScale: 0.06,
+        bumpScale: 0.04,
         roughness: 0.94,
         metalness: 0.02
       });
       globeMoon = new THREE.Mesh(moonGeo, moonMat);
       globeScene.add(globeMoon);
+
+      // High-Definition Seamless Polar Caps (Eliminating polar pinching/stretching at both South and North poles)
+      const southPoleCap = createPolarCapMesh(true);
+      const northPoleCap = createPolarCapMesh(false);
+      globeMoon.add(southPoleCap);
+      globeMoon.add(northPoleCap);
 
       // Glowing Cyan 80°S Artemis Boundary Ring
       const ringLat = -80 * (Math.PI / 180);
@@ -1417,7 +1431,7 @@
       globeScene.add(new THREE.Line(ringGeo, ringMat));
 
       // Directional Sun Light (Warm solar illumination casting deep crater shadows)
-      globeSunLight = new THREE.DirectionalLight(0xfffaed, 3.4);
+      globeSunLight = new THREE.DirectionalLight(0xfffaed, 2.6);
       globeScene.add(globeSunLight);
 
       // Realistic Earthshine and ambient space lighting (keeps craters visible in shadow)
@@ -1466,7 +1480,7 @@
 
         // 2. Raycast against lunar globe surface
         if (globeMoon) {
-          const moonHits = raycaster.intersectObject(globeMoon);
+          const moonHits = raycaster.intersectObject(globeMoon, true);
           if (moonHits.length > 0) {
             const hit = moonHits[0].point;
             // Lunar South Pole is near y = -1.0
@@ -1486,6 +1500,318 @@
 
       globeInitialized = true;
       animate3DGlobe();
+    }
+
+    /* ---------- High-Definition Seamless Polar Caps (No Pinching/Stretching) ---------- */
+    function generatePolarCanvasTextures(isSouth) {
+      const size = 1024;
+      const cColor = document.createElement('canvas');
+      cColor.width = size; cColor.height = size;
+      const ctxC = cColor.getContext('2d');
+
+      const cBump = document.createElement('canvas');
+      cBump.width = size; cBump.height = size;
+      const ctxB = cBump.getContext('2d');
+
+      const cx = size / 2, cy = size / 2;
+
+      // 1. Base Regolith Fill
+      ctxC.fillStyle = '#c2c6ce';
+      ctxC.fillRect(0, 0, size, size);
+      ctxB.fillStyle = '#808080';
+      ctxB.fillRect(0, 0, size, size);
+
+      // 2. Micro-relief speckle noise
+      const imgC = ctxC.getImageData(0, 0, size, size);
+      const dC = imgC.data;
+      const imgB = ctxB.getImageData(0, 0, size, size);
+      const dB = imgB.data;
+
+      let seed = isSouth ? 19690720 : 19721211;
+      function rnd() {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+      }
+
+      for (let i = 0; i < size * size; i++) {
+        const noise = (rnd() - 0.5) * 14;
+        const base = 194 + noise;
+        dC[i * 4] = Math.min(255, Math.max(0, base - 2));
+        dC[i * 4 + 1] = Math.min(255, Math.max(0, base));
+        dC[i * 4 + 2] = Math.min(255, Math.max(0, base + 4));
+
+        const bNoise = Math.min(255, Math.max(0, 128 + noise * 0.7));
+        dB[i * 4] = bNoise;
+        dB[i * 4 + 1] = bNoise;
+        dB[i * 4 + 2] = bNoise;
+      }
+      ctxC.putImageData(imgC, 0, 0);
+      ctxB.putImageData(imgB, 0, 0);
+
+      // Helper to render authentic circular craters
+      function drawCrater(x, y, r, depth = 1.0, isPsr = false) {
+        // Ejecta blanket (subtle bright halo)
+        const radEj = ctxC.createRadialGradient(x, y, r * 0.9, x, y, r * 1.35);
+        radEj.addColorStop(0, 'rgba(230, 235, 242, 0.45)');
+        radEj.addColorStop(1, 'rgba(230, 235, 242, 0)');
+        ctxC.fillStyle = radEj;
+        ctxC.beginPath(); ctxC.arc(x, y, r * 1.35, 0, Math.PI * 2); ctxC.fill();
+
+        // Crater Raised Rim (Bright white anorthosite rock)
+        ctxC.fillStyle = '#edf2f7';
+        ctxC.beginPath(); ctxC.arc(x, y, r * 1.05, 0, Math.PI * 2); ctxC.fill();
+
+        // Crater Terraced Interior & Shadowed Floor
+        const radFloor = ctxC.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r * 0.92);
+        if (isPsr) {
+          radFloor.addColorStop(0, '#10141b');
+          radFloor.addColorStop(0.75, '#1e2530');
+          radFloor.addColorStop(1, '#64748b');
+        } else {
+          radFloor.addColorStop(0, '#334155');
+          radFloor.addColorStop(0.7, '#475569');
+          radFloor.addColorStop(1, '#94a3b8');
+        }
+        ctxC.fillStyle = radFloor;
+        ctxC.beginPath(); ctxC.arc(x, y, r * 0.92, 0, Math.PI * 2); ctxC.fill();
+
+        // Central peak for large complex craters
+        if (r > 42) {
+          ctxC.fillStyle = '#f8fafc';
+          ctxC.beginPath(); ctxC.arc(x, y, r * 0.14, 0, Math.PI * 2); ctxC.fill();
+        }
+
+        // --- Bump Map Rendering ---
+        ctxB.fillStyle = '#ffffff';
+        ctxB.beginPath(); ctxB.arc(x, y, r * 1.05, 0, Math.PI * 2); ctxB.fill();
+
+        const radBump = ctxB.createRadialGradient(x, y, 0, x, y, r * 0.92);
+        radBump.addColorStop(0, '#1a1a1a');
+        radBump.addColorStop(0.8, '#303030');
+        radBump.addColorStop(1, '#808080');
+        ctxB.fillStyle = radBump;
+        ctxB.beginPath(); ctxB.arc(x, y, r * 0.92, 0, Math.PI * 2); ctxB.fill();
+
+        if (r > 42) {
+          ctxB.fillStyle = '#e0e0e0';
+          ctxB.beginPath(); ctxB.arc(x, y, r * 0.14, 0, Math.PI * 2); ctxB.fill();
+        }
+      }
+
+      if (isSouth) {
+        // Authentic Lunar South Pole Craters & Highland Ridges
+        // 1. Shackleton Crater (exact South Pole at center 512, 512)
+        drawCrater(512, 512, 28, 1.2, true);
+
+        // 2. Connecting Ridge (elevated bridge between Shackleton and de Gerlache)
+        ctxC.fillStyle = '#f1f5f9';
+        ctxC.beginPath();
+        ctxC.ellipse(435, 385, 95, 26, Math.PI / 3.8, 0, Math.PI * 2);
+        ctxC.fill();
+        ctxB.fillStyle = '#f5f5f5';
+        ctxB.beginPath();
+        ctxB.ellipse(435, 385, 95, 26, Math.PI / 3.8, 0, Math.PI * 2);
+        ctxB.fill();
+
+        // 3. de Gerlache Crater
+        drawCrater(415, 525, 42, 1.0, true);
+
+        // 4. Malapert Massif & Plateau (towering mountain summit)
+        ctxC.fillStyle = '#f8fafc';
+        ctxC.beginPath();
+        ctxC.ellipse(756, 530, 68, 42, -Math.PI / 5, 0, Math.PI * 2);
+        ctxC.fill();
+        ctxB.fillStyle = '#ffffff';
+        ctxB.beginPath();
+        ctxB.ellipse(756, 530, 68, 42, -Math.PI / 5, 0, Math.PI * 2);
+        ctxB.fill();
+        drawCrater(775, 545, 36, 0.9, false);
+
+        // 5. Peak of Light (prominent illuminated massif)
+        drawCrater(268, 538, 24, 0.7, false);
+        ctxC.fillStyle = '#ffffff';
+        ctxC.beginPath(); ctxC.arc(268, 538, 12, 0, Math.PI * 2); ctxC.fill();
+
+        // 6. Nobile Crater (VIPER mission exploration target)
+        drawCrater(471, 279, 64, 1.1, true);
+
+        // 7. Shoemaker Basin (deep permanently shadowed volatile trap)
+        drawCrater(640, 585, 58, 1.1, true);
+
+        // 8. Faustini Crater
+        drawCrater(730, 515, 48, 1.0, true);
+
+        // 9. Haworth Crater
+        drawCrater(505, 635, 46, 1.0, true);
+
+        // 10. Amundsen Crater
+        drawCrater(810, 430, 78, 1.2, true);
+
+        // 11. Sverdrup Crater
+        drawCrater(360, 440, 38, 0.9, true);
+
+        // 12. Slater Crater
+        drawCrater(480, 570, 26, 0.8, true);
+
+      } else {
+        // Authentic Lunar North Pole Craters
+        // 1. Peary Crater (North Polar Basin)
+        drawCrater(580, 460, 72, 1.0, false);
+
+        // 2. Byrd Crater
+        drawCrater(530, 310, 80, 1.1, false);
+
+        // 3. Hermite Crater (record cryogenic cold spot)
+        drawCrater(330, 515, 88, 1.2, true);
+
+        // 4. Whipple Crater (near North Pole)
+        drawCrater(540, 490, 26, 0.9, true);
+
+        // 5. Rozhdestvenskiy Crater
+        drawCrater(350, 360, 92, 1.1, true);
+
+        // 6. Plaskett Crater
+        drawCrater(710, 420, 68, 1.0, false);
+
+        // 7. Main Crater
+        drawCrater(640, 310, 52, 0.8, false);
+      }
+
+      // 80+ distributed realistic micro-craters
+      for (let k = 0; k < 90; k++) {
+        const mcTh = rnd() * Math.PI * 2;
+        const mcR = 50 + rnd() * 370;
+        const mcX = cx + Math.cos(mcTh) * mcR;
+        const mcY = cy + Math.sin(mcTh) * mcR;
+        const mcRad = 5 + rnd() * 16;
+        drawCrater(mcX, mcY, mcRad, 0.6, rnd() > 0.65);
+      }
+
+      // Outer alpha feathering (Hermite smoothstep blend at perimeter)
+      const dataC = ctxC.getImageData(0, 0, size, size);
+      const pxC = dataC.data;
+      const dataB = ctxB.getImageData(0, 0, size, size);
+      const pxB = dataB.data;
+
+      const rInner = 390, rOuter = 490;
+      for (let y = 0; y < size; y++) {
+        const dy = y - cy;
+        for (let x = 0; x < size; x++) {
+          const dx = x - cx;
+          const dist = Math.hypot(dx, dy);
+          const idx = (y * size + x) * 4;
+
+          if (dist <= rInner) {
+            pxC[idx + 3] = 255;
+          } else if (dist < rOuter) {
+            const t = (dist - rInner) / (rOuter - rInner);
+            const alpha = 1.0 - t * t * (3 - 2 * t);
+            pxC[idx + 3] = Math.round(alpha * 255);
+            pxB[idx] = Math.round(pxB[idx] * alpha + 128 * (1 - alpha));
+            pxB[idx + 1] = pxB[idx];
+            pxB[idx + 2] = pxB[idx];
+          } else {
+            pxC[idx + 3] = 0;
+            pxB[idx] = 128;
+            pxB[idx + 1] = 128;
+            pxB[idx + 2] = 128;
+          }
+        }
+      }
+      ctxC.putImageData(dataC, 0, 0);
+      ctxB.putImageData(dataB, 0, 0);
+
+      const colorMap = new THREE.CanvasTexture(cColor);
+      colorMap.anisotropy = 4;
+      const bumpMap = new THREE.CanvasTexture(cBump);
+      bumpMap.anisotropy = 4;
+
+      return { colorMap, bumpMap };
+    }
+
+    function createPolarCapMesh(isSouth) {
+      const thetaMax = 15 * (Math.PI / 180); // 15 degrees (~75° latitude)
+      const rings = 32, segments = 64;
+      const R = 1.0015; // Sits smoothly just above 1.0 to eliminate z-fighting
+
+      const geom = new THREE.BufferGeometry();
+      const positions = [];
+      const normals = [];
+      const uvs = [];
+      const indices = [];
+
+      const ySign = isSouth ? -1 : 1;
+
+      // Vertex 0: Apex (the pole)
+      positions.push(0, ySign * R, 0);
+      normals.push(0, ySign, 0);
+      uvs.push(0.5, 0.5);
+
+      // Concentric rings
+      for (let r = 1; r <= rings; r++) {
+        const th = (r / rings) * thetaMax;
+        const y = ySign * R * Math.cos(th);
+        const rad = R * Math.sin(th);
+
+        for (let s = 0; s < segments; s++) {
+          const phi = (s / segments) * Math.PI * 2;
+          const x = rad * Math.sin(phi);
+          const z = rad * Math.cos(phi);
+
+          positions.push(x, y, z);
+          normals.push(x / R, y / R, z / R);
+
+          const u = 0.5 + (x / (2 * R * Math.sin(thetaMax)));
+          const v = isSouth ? (0.5 + (z / (2 * R * Math.sin(thetaMax)))) : (0.5 - (z / (2 * R * Math.sin(thetaMax))));
+          uvs.push(u, v);
+        }
+      }
+
+      // Apex fan
+      for (let s = 0; s < segments; s++) {
+        const next = (s + 1) % segments;
+        if (isSouth) {
+          indices.push(0, next + 1, s + 1);
+        } else {
+          indices.push(0, s + 1, next + 1);
+        }
+      }
+
+      // Intermediate quads
+      for (let r = 1; r < rings; r++) {
+        const r1 = 1 + (r - 1) * segments;
+        const r2 = 1 + r * segments;
+        for (let s = 0; s < segments; s++) {
+          const next = (s + 1) % segments;
+          const a = r1 + s, b = r1 + next;
+          const c = r2 + s, d = r2 + next;
+          if (isSouth) {
+            indices.push(a, d, c);
+            indices.push(a, b, d);
+          } else {
+            indices.push(a, c, d);
+            indices.push(a, d, b);
+          }
+        }
+      }
+
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geom.setIndex(indices);
+
+      const { colorMap, bumpMap } = generatePolarCanvasTextures(isSouth);
+
+      const mat = new THREE.MeshStandardMaterial({
+        map: colorMap,
+        bumpMap: bumpMap,
+        bumpScale: 0.055,
+        roughness: 0.92,
+        metalness: 0.02,
+        transparent: true
+      });
+
+      return new THREE.Mesh(geom, mat);
     }
 
     function gridTo3DVector(idx) {
@@ -1958,6 +2284,10 @@
     if (window.location.hash === '#2d') {
       const btn2d = document.querySelector('#viewMode button[data-view="2d"]');
       if (btn2d) btn2d.click();
+    } else if (window.location.hash === '#pole') {
+      setTimeout(() => {
+        if ($('btnFocusPole')) $('btnFocusPole').click();
+      }, 300);
     }
 
     updateDetailsCard();
