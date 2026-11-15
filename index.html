@@ -792,21 +792,13 @@
     </div>
   </div>
 
-  <!-- Three.js + OrbitControls Bundle (Self-Contained Offline with Fallback) -->
-  <script src="./js/three-bundle.js" onerror="this.onerror=null; this.src='./public/js/three-bundle.js';"></script>
+  <!-- Three.js + OrbitControls (High-Reliability CDN with Local Fallback) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script>
-    window.__initThreeFallback = function() {
-      if (typeof THREE === 'undefined') {
-        var s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-        s.onload = function() {
-          var o = document.createElement('script');
-          o.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js';
-          document.head.appendChild(o);
-        };
-        document.head.appendChild(s);
-      }
-    };
+    if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+      document.write('<script src="./public/js/three-bundle.js"><\/script>');
+    }
   </script>
 
   <script>
