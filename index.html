@@ -1352,6 +1352,8 @@
       globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
       globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       globeRenderer.setSize(w, w, false);
+      globeRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      globeRenderer.toneMappingExposure = 1.0;
 
       globeControls = new THREE.OrbitControls(globeCamera, canvas);
       globeControls.enableDamping = true;
@@ -1431,11 +1433,11 @@
       globeScene.add(new THREE.Line(ringGeo, ringMat));
 
       // Directional Sun Light (Warm solar illumination casting deep crater shadows)
-      globeSunLight = new THREE.DirectionalLight(0xfffaed, 2.6);
+      globeSunLight = new THREE.DirectionalLight(0xfffaed, 1.15);
       globeScene.add(globeSunLight);
 
       // Realistic Earthshine and ambient space lighting (keeps craters visible in shadow)
-      const ambLight = new THREE.AmbientLight(0x283548, 0.75);
+      const ambLight = new THREE.AmbientLight(0x283548, 0.25);
       globeScene.add(ambLight);
 
       const earthLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
