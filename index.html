@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MoonWindow | Lunar Landing Site Navigator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Evaluate candidate landing sites and launch dates at the Moon's South Pole with interactive 3D Moon and 2D terrain cartography.">
+  <meta name="theme-color" content="#07090e">
+
+  <style>
+    :root {
+      --bg: #07090e;
+      --bg-gradient: radial-gradient(circle at 50% 0%, #111827 0%, #07090e 100%);
+      --surface: #0e131f;
+      --surface-glass: rgba(14, 19, 31, 0.82);
+      --surface-2: #141c2c;
+      --surface-2-hover: #1a253a;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-subtle: rgba(255, 255, 255, 0.04);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --fg: #f1f5f9;
+      --fg-bright: #ffffff;
+      --muted: #94a3b8;
+      --muted-dark: #64748b;
+      --sun: #f59e0b;
+      --ice: #38bdf8;
+      --ok: #10b981;
+      --ok-bg: rgba(16, 185, 129, 0.12);
+      --bad: #f43f5e;
+      --bad-bg: rgba(244, 63, 94, 0.12);
+      --warn: #fbbf24;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      background-image: var(--bg-gradient);
+      color: var(--fg);
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Clean subtle scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+
+    a, button { transition: all 0.15s ease; font-family: inherit; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+
+    /* Top Navigation Header */
+    .app-header {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--surface-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+    }
+    .header-inner {
+      max-width: 1520px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #1e293b 0%, #0d121c 100%);
+      border: 1px solid var(--border-strong);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    .brand-text h1 { font-size: 18px; font-weight: 700; color: var(--fg-bright); letter-spacing: -0.01em; }
+    .brand-text span { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      color: var(--fg); font-size: 12.5px; font-weight: 500; padding: 7px 13px; cursor: pointer;
+    }
+    .btn:hover { background: var(--surface-2-hover); border-color: var(--border-strong); color: var(--fg-bright); }
+    .btn-primary {
+      background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.4);
+      color: var(--ice); font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: rgba(56, 189, 248, 0.22); border-color: var(--ice);
+      color: #fff; box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+    }
+
+    /* Main Container */
+    .main-wrap {
+      max-width: 1520px; width: 100%; margin: 0 auto;
+      padding: 20px 24px 48px; flex: 1;
+    }
+
+    /* Two-Column Clean Dashboard Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      display: flex; flex-direction: column;
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; gap: 12px;
+    }
+    .card-title {
+      font-size: 16px; font-weight: 700; color: var(--fg-bright);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-subtitle { font-size: 12px; color: var(--muted); }
+
+    /* Segmented Button Groups */
+    .seg {
+      display: inline-flex; background: var(--surface-2); padding: 3px;
+      border-radius: var(--radius-sm); border: 1px solid var(--border);
+    }
+    .seg button {
+      background: none; border: none; padding: 5px 11px;
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      border-radius: 5px; cursor: pointer;
+    }
+    .seg button:hover { color: var(--fg); }
+    .seg button[aria-pressed="true"] {
+      background: rgba(56, 189, 248, 0.16); color: var(--ice); font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    /* View Controls Bar */
+    .view-controls-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
+    }
+    .control-hint { font-size: 11.5px; color: var(--muted); }
+
+    /* Large Viewport Container */
+    .map-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 680px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: #020306;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+    }
+    #map {
+      display: block; width: 100%; height: 100%;
+      cursor: crosshair; touch-action: manipulation;
+    }
+    #globeWrap {
+      display: block; width: 100%; height: 100%;
+      position: relative;
+      background: radial-gradient(circle at 50% 50%, #080d1a 0%, #010204 100%);
+      cursor: grab;
+    }
+    #globeWrap:active { cursor: grabbing; }
+    #globeCanvas { width: 100%; height: 100%; display: block; }
+
+    /* Floating Viewport HUD */
+    .map-hud {
+      position: absolute; bottom: 12px; left: 12px; right: 12px;
+      background: rgba(10, 15, 25, 0.88); backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+      padding: 8px 14px; font-size: 12px; color: var(--muted);
+      display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+    .map-hud b { color: var(--fg-bright); }
+
+    /* Destination Details Card Elements */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    }
+    .status-pass {
+      background: rgba(16, 185, 129, 0.12); color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .status-fail {
+      background: rgba(244, 63, 94, 0.12); color: #fb7185;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+
+    .dest-score-banner {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 2px; margin-bottom: 12px;
+    }
+    .dest-score-left {
+      display: flex; align-items: baseline; gap: 4px;
+    }
+    .dest-score-num {
+      font-size: 28px; font-weight: 800; line-height: 1;
+      color: var(--ok); letter-spacing: -0.02em;
+    }
+    .dest-score-denom {
+      font-size: 13px; color: var(--muted); font-weight: 600;
+    }
+    .dest-score-summary {
+      font-size: 12px; color: var(--muted); text-align: right; max-width: 250px; line-height: 1.35;
+    }
+
+    /* Artemis Safety Constraints Checklist */
+    .safety-checklist {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      margin-top: 2px;
+      margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 6px; flex-wrap: wrap;
+    }
+    .safety-check-title {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .safety-pills {
+      display: flex; gap: 5px; flex-wrap: wrap;
+    }
+    .safety-pill {
+      font-size: 10px; font-weight: 600; padding: 2.5px 7px;
+      border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+      letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+    }
+    .check-pass {
+      background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .check-fail {
+      background: rgba(244, 63, 94, 0.12); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+
+    /* Modal Backdrop & Dialog */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(3, 7, 18, 0.78);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-dialog {
+      background: #0b111e; border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md); max-width: 580px; width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8); overflow: hidden;
+      display: flex; flex-direction: column; animation: modalIn 0.18s ease-out;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-title { font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .modal-body {
+      padding: 18px; max-height: 70vh; overflow-y: auto; color: var(--fg); font-size: 13px; line-height: 1.5;
+    }
+    .modal-footer {
+      padding: 12px 18px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 10px; background: rgba(255, 255, 255, 0.01);
+    }
+    .key-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 24px; height: 22px; padding: 0 6px; border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-strong);
+      font-size: 11px; font-weight: 700; font-family: monospace; color: var(--ice);
+    }
+    .shortcut-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .shortcut-row:last-child { border-bottom: none; }
+
+    /* 4 Clean Metric Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .metric-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 3px;
+      position: relative;
+    }
+    .metric-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .metric-label {
+      font-size: 10.5px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;
+    }
+    .metric-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--ok);
+    }
+    .metric-dot.fail { background: var(--bad); }
+    .metric-val {
+      font-size: 19px; font-weight: 700; color: var(--fg-bright); line-height: 1.1; margin: 2px 0 1px;
+    }
+    .metric-desc {
+      font-size: 11px; color: var(--muted);
+    }
+
+    /* Mission Controls Card Elements */
+    .control-section-title {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    /* Target Site Presets Grid */
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .preset-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 11px;
+      display: flex; gap: 10px; align-items: center;
+      text-align: left; cursor: pointer; color: var(--fg);
+      position: relative;
+    }
+    .preset-card:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-strong);
+    }
+    .preset-card.active {
+      border-color: var(--ice);
+      background: rgba(56, 189, 248, 0.08);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+    }
+    .preset-num {
+      width: 22px; height: 22px; border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      font-size: 10.5px; font-weight: 700; color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .preset-card.active .preset-num {
+      background: var(--ice); color: #000; border-color: var(--ice);
+    }
+    .preset-card-info b {
+      display: block; font-size: 12px; color: #fff; font-weight: 600; line-height: 1.2;
+    }
+    .preset-card-info span {
+      font-size: 10.5px; color: var(--muted); display: block; margin-top: 2px;
+    }
+
+    /* Sliders */
+    .slider-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+    .slider-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .slider-label { font-size: 12.5px; font-weight: 600; color: var(--fg-bright); }
+    .slider-val { font-size: 12.5px; font-weight: 700; color: var(--sun); }
+    input[type="range"] {
+      width: 100%; height: 5px; -webkit-appearance: none; appearance: none;
+      background: rgba(255, 255, 255, 0.15); border-radius: 3px; outline: none; margin: 4px 0 8px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--ice); cursor: pointer;
+      box-shadow: 0 0 8px var(--ice);
+    }
+    .slider-hint { font-size: 11.5px; color: var(--muted); display: block; margin-top: 4px; }
+
+    .quick-days {
+      display: flex; gap: 4px; margin-top: 6px;
+    }
+    .quick-days button {
+      flex: 1; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 0; font-size: 11px; color: var(--muted); cursor: pointer;
+    }
+    .quick-days button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+    .timeline-outcome {
+      margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm);
+      background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25);
+      font-size: 12px; color: #fde68a; line-height: 1.4;
+    }
+
+    /* Checkbox */
+    .chk { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+    .chk input { accent-color: var(--ice); }
+
+    /* Legend */
+    .legend-bar-wrap { margin-top: 8px; display: none; }
+    .legend-bar { height: 6px; border-radius: 3px; margin-bottom: 4px; }
+    .legend-labels { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); }
+
+    @media (max-width: 1024px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .metrics-grid { grid-template-columns: 1fr; }
+      .presets-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a7 7 0 1 0 7 7"/></svg>
+        </div>
+        <div class="brand-text">
+          <h1>MoonWindow</h1>
+          <span>Lunar Landing Site Navigator</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn" id="btnShortcuts" title="Keyboard Shortcuts (Press ?)" style="font-size:12px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10"/></svg>
+          <span>Keys</span>
+        </button>
+        <button class="btn" id="btnExportBriefing" title="Export site telemetry briefing" style="font-size:12px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export Briefing</span>
+        </button>
+        <button class="btn btn-primary" id="btnPlayOrbit" style="font-size:12px">
+          <svg id="iconPlay" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span id="labelPlay">Play Sun Orbit</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <main class="main-wrap">
+    <div class="dashboard-grid">
+      
+      <!-- LEFT COLUMN: BIG VIEW CARD ONLY (3D MOON & 2D SHADED RELIEF) -->
+      <div class="col">
+        <section class="card" aria-label="Lunar Surface Navigator">
+          <div class="card-header">
+            <div class="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a7 7 0 1 0 7 7"/></svg>
+              <span id="mapCardTitle">Interactive 3D Moon Globe</span>
+            </div>
+            
+            <!-- View Switcher: 3D Globe vs 2D Map -->
+            <div class="seg" id="viewMode" role="group" aria-label="Map view mode">
+              <button data-view="3d" aria-pressed="true">3D Globe</button>
+              <button data-view="2d" aria-pressed="false">2D Map</button>
+            </div>
+          </div>
+
+          <!-- 3D Globe Controls Bar -->
+          <div id="globeControlsBar" class="view-controls-bar">
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="btn btn-primary" id="btnFocusPole" style="font-size:11.5px;padding:4px 10px">
+                Focus Pole
+              </button>
+              <button class="btn" id="btnWholeMoon" style="font-size:11.5px;padding:4px 10px">
+                Full Globe
+              </button>
+              <button class="btn" id="btnAutoSpin" style="font-size:11.5px;padding:4px 10px">
+                Auto-Spin
+              </button>
+              <button class="btn" id="btnZoomIn" style="font-size:12px;padding:4px 10px;min-width:30px" title="Zoom In">+</button>
+              <button class="btn" id="btnZoomOut" style="font-size:12px;padding:4px 10px;min-width:30px" title="Zoom Out">−</button>
+            </div>
+            <span class="control-hint">Drag to rotate • Scroll to zoom • Click surface or pins to select</span>
+          </div>
+
+          <!-- 2D Layer Controls Bar (Shown when in 2D Map) -->
+          <div id="layerBar" class="view-controls-bar" style="display:none">
+            <div class="seg" id="layers" role="group" aria-label="Map layer">
+              <button data-layer="relief" aria-pressed="true">Shaded Relief</button>
+              <button data-layer="suit" aria-pressed="false">Safety Overlay</button>
+            </div>
+            <label class="chk" style="font-size:12px">
+              <input type="checkbox" id="showNames" checked>
+              <span>Landmarks</span>
+            </label>
+            <span class="control-hint">Click terrain to select landing target</span>
+          </div>
+
+          <!-- Large Viewport Container -->
+          <div class="map-container" id="mapCardContainer">
+            <!-- 2D Canvas -->
+            <canvas id="map" tabindex="0" style="display:none" aria-label="Lunar elevation map"></canvas>
+
+            <!-- 3D Moon Globe Viewport -->
+            <div id="globeWrap" style="display:block">
+              <canvas id="globeCanvas" aria-label="Interactive 3D Moon globe"></canvas>
+              <div class="map-hud" id="globeHud">
+                <span><b>Artemis Exploration Zone</b> (80°S–90°S)</span>
+                <span id="globeCoords">Connecting Ridge Selected</span>
+              </div>
+            </div>
+
+            <!-- 2D HUD -->
+            <div class="map-hud" id="mapHud" style="display:none">
+              <span id="mapHudCoords">Hover over terrain to inspect</span>
+              <span id="hudScore">Score: 88/100</span>
+            </div>
+          </div>
+
+          <div class="legend-bar-wrap" id="legend"></div>
+        </section>
+      </div>
+
+      <!-- RIGHT COLUMN: EXACTLY 2 CARDS -->
+      <div class="col" style="display:flex;flex-direction:column;gap:20px">
+        
+        <!-- CARD 1: DESTINATION DETAILS -->
+        <section class="card" id="cardDestination" aria-label="Destination Details">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="destName">Connecting Ridge</div>
+              <div class="card-subtitle" id="siteCoord">Polar stereographic: x 8.5 km, y 1.6 km • Elevation: +1,240 m</div>
+            </div>
+            <div id="destBadge" class="status-pill status-pass">SUITABLE</div>
+          </div>
+
+          <!-- Score Banner -->
+          <div class="dest-score-banner">
+            <div class="dest-score-left">
+              <span class="dest-score-num" id="destScore">80</span>
+              <span class="dest-score-denom">/ 100</span>
+            </div>
+            <div class="dest-score-summary" id="destSummary">
+              Nominal landing zone. High solar power, direct Earth line-of-sight, and gentle slope.
+            </div>
+          </div>
+
+          <!-- Artemis Safety Constraints Checklist Strip -->
+          <div class="safety-checklist" id="safetyChecklist">
+            <span class="safety-check-title">Artemis Safety Thresholds</span>
+            <div class="safety-pills">
+              <span class="safety-pill check-pass" id="chkSlope">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Slope &le; 8°</span>
+              </span>
+              <span class="safety-pill check-pass" id="chkSun">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Sun &ge; 30%</span>
+              </span>
+              <span class="safety-pill check-pass" id="chkComms">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>DTE &ge; 20%</span>
+              </span>
+              <span class="safety-pill check-pass" id="chkIce">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Ice &le; 5 km</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- 4 Clean Metric Cards (Zero Emojis, Aerospace Telemetry) -->
+          <div class="metrics-grid">
+            <!-- Metric 1: Slope -->
+            <div class="metric-card" id="mSlopeCard">
+              <div class="metric-header">
+                <span class="metric-label">Ground Slope</span>
+                <span class="metric-dot" id="dotSlope"></span>
+              </div>
+              <div class="metric-val" id="valSlope">1.4°</div>
+              <div class="metric-desc" id="descSlope">Safe (&lt; 8.0° Limit)</div>
+            </div>
+
+            <!-- Metric 2: Sunlight -->
+            <div class="metric-card" id="mSunCard">
+              <div class="metric-header">
+                <span class="metric-label">Solar Power</span>
+                <span class="metric-dot" id="dotSun"></span>
+              </div>
+              <div class="metric-val" id="valSun">92%</div>
+              <div class="metric-desc" id="descSun">Continuous charging</div>
+            </div>
+
+            <!-- Metric 3: Earth View -->
+            <div class="metric-card" id="mEarthCard">
+              <div class="metric-header">
+                <span class="metric-label">Earth DTE</span>
+                <span class="metric-dot" id="dotEarth"></span>
+              </div>
+              <div class="metric-val" id="valEarth">100%</div>
+              <div class="metric-desc" id="descEarth">Direct line of sight</div>
+            </div>
+
+            <!-- Metric 4: Water Ice -->
+            <div class="metric-card" id="mIceCard">
+              <div class="metric-header">
+                <span class="metric-label">Water Ice</span>
+                <span class="metric-dot" id="dotIce" style="background:var(--ice)"></span>
+              </div>
+              <div class="metric-val" id="valIce">3.2 km</div>
+              <div class="metric-desc" id="descIce">Adjacent PSR access</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 2: MISSION INFO & CONTROLS -->
+        <section class="card" id="cardMissionControls" aria-label="Mission Controls">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Target Sites & Orbit</div>
+              <div class="card-subtitle">Select candidate landing zone</div>
+            </div>
+          </div>
+
+          <!-- Candidate Target Sites with Sleek Number Badges -->
+          <div class="control-section-title">Candidate Landing Sites</div>
+          <div class="presets-grid" id="presets">
+            <button class="preset-card active" data-site="cr">
+              <div class="preset-num">01</div>
+              <div class="preset-card-info">
+                <b>Connecting Ridge</b>
+                <span>Primary Target • High Illumination</span>
+              </div>
+            </button>
+            <button class="preset-card" data-site="mm">
+              <div class="preset-num">02</div>
+              <div class="preset-card-info">
+                <b>Malapert Massif</b>
+                <span>Mountain Ridge • Continuous Earth Link</span>
+              </div>
+            </button>
+            <button class="preset-card" data-site="pel">
+              <div class="preset-num">03</div>
+              <div class="preset-card-info">
+                <b>Peak of Light</b>
+                <span>Crater Rim • Maximum Sunlight Peak</span>
+              </div>
+            </button>
+            <button class="preset-card" data-site="nob">
+              <div class="preset-num">04</div>
+              <div class="preset-card-info">
+                <b>Nobile (VIPER)</b>
+                <span>Volatiles Target • Near PSR Deposits</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Mission Date & Sun Orbit Slider -->
+          <div class="control-section-title" style="margin-top:14px">Solar Orbit Simulation</div>
+          <div class="slider-item">
+            <div class="slider-row">
+              <span class="slider-label">Synodic Day in Month</span>
+              <span class="slider-val" id="o-mDay">Day 0.0</span>
+            </div>
+            <input type="range" id="mDay" min="0" max="29.5" step="0.25" value="0">
+            <div class="quick-days">
+              <button data-day="0">Day 0</button>
+              <button data-day="7.4">Day 7</button>
+              <button data-day="14.8">Day 15</button>
+              <button data-day="22.1">Day 22</button>
+              <button data-day="29.5">Day 29.5</button>
+            </div>
+            <span class="slider-hint">Simulate sun angle and dynamic shadow progression across lunar terrain.</span>
+          </div>
+
+          <!-- Launch Delay Slider -->
+          <div class="slider-item" style="margin-top:10px">
+            <div class="slider-row">
+              <span class="slider-label">Launch Window Slip</span>
+              <span class="slider-val" id="o-slip">+0 days</span>
+            </div>
+            <input type="range" id="slip" min="0" max="14" step="1" value="0">
+            <div class="timeline-outcome" id="timelineOutcome">
+              Solar Azimuth: 0.0° • Elevation: +1.5° • Nominal power profile.
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Presentation Hotkeys Modal -->
+  <div class="modal-backdrop" id="modalShortcuts" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10"/></svg>
+          Presentation Hotkeys
+        </div>
+        <button class="btn" id="btnCloseShortcuts" style="padding:2px 8px;font-size:14px">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcut-row">
+          <span>Play / Pause Sun Orbit Simulation</span>
+          <span class="key-badge">Space</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Select Target 01 (Connecting Ridge)</span>
+          <span class="key-badge">1</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Select Target 02 (Malapert Massif)</span>
+          <span class="key-badge">2</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Select Target 03 (Peak of Light)</span>
+          <span class="key-badge">3</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Select Target 04 (Nobile VIPER)</span>
+          <span class="key-badge">4</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Toggle 3D Globe / 2D Map</span>
+          <span class="key-badge">M</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Focus South Pole Landing Zone</span>
+          <span class="key-badge">F</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Full Moon Globe in Deep Space</span>
+          <span class="key-badge">G</span>
+        </div>
+        <div class="shortcut-row">
+          <span>Zoom In / Zoom Out</span>
+          <div style="display:flex;gap:4px"><span class="key-badge">+</span><span class="key-badge">-</span></div>
+        </div>
+        <div class="shortcut-row">
+          <span>Toggle Shortcuts Help</span>
+          <span class="key-badge">?</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btnGotItShortcuts">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission Telemetry Briefing Export Modal -->
+  <div class="modal-backdrop" id="modalBriefing" role="dialog" aria-modal="true" aria-label="Mission Telemetry Briefing">
+    <div class="modal-dialog" style="max-width:640px">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          NASA Artemis Landing Site Telemetry Briefing
+        </div>
+        <button class="btn" id="btnCloseBriefing" style="padding:2px 8px;font-size:14px">&times;</button>
+      </div>
+      <div class="modal-body" id="briefingContent">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn" id="btnDownloadJson">Download JSON</button>
+        <button class="btn btn-primary" id="btnPrintBriefing">Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js + OrbitControls Bundle (Self-Contained Offline) -->
+  <script src="./js/three-bundle.js"></script>
+
+  <script>
+  (function(){
+    'use strict';
+    const N = 150, NA = 24, DEG = 180 / Math.PI, DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
+    const $ = id => document.getElementById(id);
+    const on = (id, event, handler) => {
+      const el = $(id);
+      if (el) el.addEventListener(event, handler);
+    };
+    const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+    const S = {
+      ext: 40, cell: 40000 / N, source: 'demo', sunEl: 1.5,
+      maxSlope: 8, minSun: 30, minComm: 20, travMax: 15, preferSun: true,
+      w: { safe: 5, power: 4, comms: 2, res: 3 },
+      layer: 'relief', mode: 'site', showPsr: true, showNames: true, view: '3d',
+      site: -1, siteManual: false, dest: -1, destManual: false, route: null, cands: [],
+      mDay: 0, slip: 0,
+      isPlaying: false, animTimer: null
+    };
+
+    let H = new Float32Array(N * N);
+    const mk = () => new Float32Array(N * N);
+    const slope = mk(), slope3 = mk(), relief = mk(), normX = mk(), normY = mk(), normZ = mk(), hs = mk(), illum = mk(), darkDays = mk(), comms = mk(), dIce = mk(), score = mk();
+    const psr = new Uint8Array(N * N), iceEdge = new Uint8Array(N * N), okc = new Uint8Array(N * N);
+
+    /* Preset target indices */
+    const PRESETS = {
+      cr: 932,     // Connecting Ridge (Score ~80, Slope 1.4°, Sun 92%, Earth 100%)
+      mm: 12141,   // Malapert Massif (Score ~78, Slope 2.5°, Sun 100%, Earth 100%)
+      pel: 12309,  // Peak of Light (Score ~77, Slope 0.8°, Sun 83%, Earth 67%)
+      nob: 1864    // Nobile VIPER (Score ~77, Slope 1.1°, Sun 75%, Earth 100%)
+    };
+
+    /* Authentic Lunar South Pole Geographic Landmarks */
+    const LANDMARKS = [
+      { name: 'Connecting Ridge', x: 32, y: 6, elev: '+1,240m' },
+      { name: 'Malapert Massif', x: 141, y: 80, elev: '+5,020m' },
+      { name: 'Peak of Light', x: 9, y: 82, elev: '+1,850m' },
+      { name: 'Nobile (VIPER)', x: 64, y: 12, elev: '-420m' },
+      { name: 'Shackleton Rim (PSR)', x: 105, y: 101, elev: '-1,800m' }
+    ];
+
+    /* Procedural Terrain Generator */
+    function rng(a) {
+      return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    function hash(x, y, s) {
+      let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1274126177) | 0;
+      h = Math.imul(h ^ h >>> 13, 1274126177);
+      return ((h ^ h >>> 16) >>> 0) / 4294967296;
+    }
+    function vn(x, y, s) {
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+      const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s);
+      return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+    }
+
+    function genTerrain() {
+      const r = rng(11), cr = [[14, 27, 6.5, 1500], [28, 11, 4.2, 900], [31, 31, 3.0, 520], [8, 9, 2.4, 380], [22, 5, 1.7, 210]];
+      for (let i = 0; i < 34; i++) {
+        const rad = 0.7 + r() * 1.5;
+        cr.push([r() * 40, r() * 40, rad, rad * (110 + r() * 90)]);
+      }
+      const k = 40 / N;
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          const X = (x + 0.5) * k, Y = (y + 0.5) * k;
+          let h = 380 * vn(X / 10, Y / 10, 1) + 110 * vn(X / 3.2, Y / 3.2, 2) + 22 * vn(X / 1.1, Y / 1.1, 3) + 7 * vn(X / 0.55, Y / 0.55, 4);
+          h += 850 * Math.exp(-((X - 21) ** 2 + (Y - 21) ** 2) / 72) + 420 * Math.exp(-((X - 35) ** 2 + (Y - 19) ** 2) / 32);
+          for (const c of cr) {
+            const d = Math.hypot(X - c[0], Y - c[1]) / c[2];
+            if (d > 3.5) continue;
+            const D = c[3];
+            if (d < 1) h -= D * (1 - d * d);
+            const q = (d - 1) / 0.22;
+            h += D * 0.16 * Math.exp(-q * q);
+            if (d > 1) h += D * 0.06 * Math.exp(-(d - 1) * 1.2);
+          }
+          H[y * N + x] = h;
+        }
+      }
+    }
+
+    function normalDerivs() {
+      const c = S.cell, EX = 2.2;
+      const lap = mk();
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          const i = y * N + x, xm = Math.max(0, x - 1), xp = Math.min(N - 1, x + 1), ym = Math.max(0, y - 1), yp = Math.min(N - 1, y + 1);
+          const dzdx = (H[y * N + xp] - H[y * N + xm]) / ((xp - xm) * c);
+          const dzdy = (H[yp * N + x] - H[ym * N + x]) / ((yp - ym) * c);
+          slope[i] = Math.atan(Math.hypot(dzdx, dzdy)) * DEG;
+          const nx = -dzdx * EX, ny = -dzdy * EX, nl = Math.hypot(nx, ny, 1);
+          normX[i] = nx / nl; normY[i] = ny / nl; normZ[i] = 1 / nl;
+          let s = 0, n = 0;
+          for (let q = 0; q < 8; q++) {
+            const a = x + DX[q], b = y + DY[q];
+            if (a < 0 || b < 0 || a >= N || b >= N) continue;
+            s += H[b * N + a]; n++;
+          }
+          lap[i] = Math.abs(H[i] - s / n);
+        }
+      }
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          let ms = 0, mr = 0;
+          for (let b = Math.max(0, y - 1); b <= Math.min(N - 1, y + 1); b++) {
+            for (let a = Math.max(0, x - 1); a <= Math.min(N - 1, x + 1); a++) {
+              const j = b * N + a;
+              if (slope[j] > ms) ms = slope[j];
+              if (lap[j] > mr) mr = lap[j];
+            }
+          }
+          slope3[y * N + x] = ms; relief[y * N + x] = mr;
+        }
+      }
+      updateDynamicHillshade();
+    }
+
+    function updateDynamicHillshade() {
+      const totalDays = S.mDay + S.slip;
+      const sunAzRad = (totalDays / 29.53059) * 2 * Math.PI;
+      let Lx = Math.sin(sunAzRad), Ly = -Math.cos(sunAzRad), Lz = Math.max(0.2, Math.tan(S.sunEl / DEG));
+      const ln = Math.hypot(Lx, Ly, Lz); Lx /= ln; Ly /= ln; Lz /= ln;
+      for (let i = 0; i < N * N; i++) {
+        hs[i] = clamp(normX[i] * Lx + normY[i] * Ly + normZ[i] * Lz, 0, 1);
+      }
+    }
+
+    function blocked(x, y, dx, dy, t) {
+      const h0 = H[y * N + x], c = S.cell;
+      for (let k = 1; k < 215; k++) {
+        const sx = Math.round(x + dx * k), sy = Math.round(y + dy * k);
+        if (sx < 0 || sy < 0 || sx >= N || sy >= N) return false;
+        if (H[sy * N + sx] - h0 > t * k * c) return true;
+      }
+      return false;
+    }
+
+    function horizonFields() {
+      const t = Math.tan(S.sunEl / DEG), lit = new Uint32Array(N * N);
+      for (let a = 0; a < NA; a++) {
+        const az = a / NA * 2 * Math.PI, dx = Math.sin(az), dy = -Math.cos(az);
+        for (let y = 0; y < N; y++) {
+          for (let x = 0; x < N; x++) {
+            if (!blocked(x, y, dx, dy, t)) lit[y * N + x] |= 1 << a;
+          }
+        }
+      }
+      for (let i = 0; i < N * N; i++) {
+        const m = lit[i]; let cnt = 0;
+        for (let a = 0; a < NA; a++) cnt += (m >>> a) & 1;
+        illum[i] = cnt / NA;
+        psr[i] = (illum[i] < 0.05) ? 1 : 0;
+      }
+      const ea = 20 / DEG, edx = Math.sin(ea), edy = -Math.cos(ea), els = [0.5, 3, 6].map(e => Math.tan(e / DEG));
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          let v = 0;
+          for (const t2 of els) if (!blocked(x, y, edx, edy, t2)) v++;
+          comms[y * N + x] = v / els.length;
+        }
+      }
+    }
+
+    function iceFields() {
+      const INF = 1e9, a = 1, b = 1.4142, D = dIce;
+      for (let i = 0; i < N * N; i++) D[i] = psr[i] ? 0 : INF;
+      const rel = (x, y, w, cur) => {
+        if (x < 0 || y < 0 || x >= N || y >= N) return cur;
+        const v = D[y * N + x] + w; return v < cur ? v : cur;
+      };
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        let v = D[y * N + x];
+        v = rel(x - 1, y, a, v); v = rel(x, y - 1, a, v); v = rel(x - 1, y - 1, b, v); v = rel(x + 1, y - 1, b, v); D[y * N + x] = v;
+      }
+      for (let y = N - 1; y >= 0; y--) for (let x = N - 1; x >= 0; x--) {
+        let v = D[y * N + x];
+        v = rel(x + 1, y, a, v); v = rel(x, y + 1, a, v); v = rel(x + 1, y + 1, b, v); v = rel(x - 1, y + 1, b, v); D[y * N + x] = v;
+      }
+      for (let i = 0; i < N * N; i++) D[i] = D[i] >= INF / 2 ? 99 : D[i] * S.cell / 1000;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const i = y * N + x; let e = 0;
+        if (psr[i]) for (let q = 0; q < 4; q++) {
+          const a2 = x + DX[q], b2 = y + DY[q];
+          if (a2 < 0 || b2 < 0 || a2 >= N || b2 >= N) continue;
+          if (!psr[b2 * N + a2]) e = 1;
+        }
+        iceEdge[i] = e;
+      }
+    }
+
+    function parts(i) {
+      return {
+        safe: clamp(1 - slope3[i] / S.maxSlope, 0, 1) * clamp(1 - relief[i] / 20, 0, 1),
+        power: illum[i],
+        comms: comms[i],
+        res: Math.exp(-dIce[i] / 5)
+      };
+    }
+
+    function fails(i) {
+      const x = i % N, y = (i / N) | 0, f = [];
+      if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2) f.push('Too close to edge');
+      if (slope3[i] > S.maxSlope) f.push('Slope exceeds 8°');
+      if (illum[i] * 100 < S.minSun) f.push('Low sunlight');
+      if (comms[i] * 100 < S.minComm) f.push('Blocked Earth view');
+      return f;
+    }
+
+    function rescore() {
+      const W = S.w, sumW = W.safe + W.power + W.comms + W.res;
+      for (let i = 0; i < N * N; i++) {
+        const fl = fails(i);
+        okc[i] = fl.length ? 0 : 1;
+        if (okc[i]) {
+          const p = parts(i);
+          score[i] = 100 * (W.safe * p.safe + W.power * p.power + W.comms * p.comms + W.res * p.res) / (sumW || 1);
+        } else {
+          score[i] = 0;
+        }
+      }
+      findCands();
+    }
+
+    function findCands() {
+      const list = [];
+      for (let y = 4; y < N - 4; y += 3) {
+        for (let x = 4; x < N - 4; x += 3) {
+          const i = y * N + x;
+          if (okc[i]) list.push({ i, sc: score[i] });
+        }
+      }
+      list.sort((a, b) => b.sc - a.sc);
+      const chosen = [];
+      for (const c of list) {
+        let ok = true;
+        for (const k of chosen) {
+          const dx = (c.i % N) - (k.i % N), dy = ((c.i / N) | 0) - ((k.i / N) | 0);
+          if (Math.hypot(dx, dy) < 14) { ok = false; break; }
+        }
+        if (ok) chosen.push(c);
+        if (chosen.length >= 5) break;
+      }
+      S.cands = chosen;
+      if (!S.siteManual) {
+        S.site = PRESETS.cr; // Default to Connecting Ridge
+      }
+    }
+
+    /* ---------- Canvas Rendering ---------- */
+    const cv = $('map'), ctx = cv ? cv.getContext('2d') : null;
+    const off = document.createElement('canvas');
+    off.width = off.height = N;
+    const octx = off.getContext('2d');
+
+    const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const R_suit = [[0, hex('#0e3a53')], [0.5, hex('#10b981')], [1, hex('#fde047')]];
+
+    function ramp(st, t) {
+      t = clamp(t, 0, 1);
+      for (let i = 1; i < st.length; i++) if (t <= st[i][0]) {
+        const a = st[i - 1], b = st[i], u = (t - a[0]) / (b[0] - a[0] || 1);
+        return [a[1][0] + (b[1][0] - a[1][0]) * u, a[1][1] + (b[1][1] - a[1][1]) * u, a[1][2] + (b[1][2] - a[1][2]) * u];
+      }
+      return st[st.length - 1][1];
+    }
+
+    function paint() {
+      updateDynamicHillshade();
+      const img = octx.createImageData(N, N), d = img.data, L = S.layer;
+      let smin = Infinity, smax = -Infinity;
+      if (L === 'suit') {
+        for (let i = 0; i < N * N; i++) if (okc[i]) {
+          if (score[i] < smin) smin = score[i]; if (score[i] > smax) smax = score[i];
+        }
+      }
+      const iceCol = hex('#38bdf8');
+      for (let i = 0; i < N * N; i++) {
+        // Authentic lunar anorthositic grey tone modulated by sun lighting
+        const g = 16 + 230 * hs[i];
+        let r = g * 0.96, gg = g * 0.98, b = g * 1.04;
+        
+        if (L === 'suit') {
+          if (okc[i]) {
+            const mul = 0.5 + 0.6 * hs[i];
+            const col = ramp(R_suit, (score[i] - smin) / ((smax - smin) || 1));
+            r = col[0] * mul; gg = col[1] * mul; b = col[2] * mul;
+          } else {
+            r *= 0.45; gg *= 0.45; b *= 0.48; // Darken excluded zones
+          }
+        }
+        
+        // Highlight ice cold traps
+        if (S.showPsr && iceEdge[i]) {
+          r = r * 0.35 + iceCol[0] * 0.65;
+          gg = gg * 0.35 + iceCol[1] * 0.65;
+          b = b * 0.35 + iceCol[2] * 0.65;
+        }
+
+        d[i * 4] = clamp(r, 0, 255);
+        d[i * 4 + 1] = clamp(gg, 0, 255);
+        d[i * 4 + 2] = clamp(b, 0, 255);
+        d[i * 4 + 3] = 255;
+      }
+      octx.putImageData(img, 0, 0);
+    }
+
+    function draw() {
+      if (S.view === '3d' || !cv || !ctx) return;
+      const W = cv.width; if (!W) return;
+      const dpr = W / (cv.clientWidth || W);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, 0, 0, W, W);
+      const P = i => [((i % N) + 0.5) / N * W, (((i / N) | 0) + 0.5) / N * W];
+
+      // Cartographic Landmark Names
+      if (S.showNames) {
+        LANDMARKS.forEach(lm => {
+          const px = (lm.x / N) * W, py = (lm.y / N) * W;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1 * dpr;
+          ctx.beginPath(); ctx.moveTo(px - 3 * dpr, py); ctx.lineTo(px + 3 * dpr, py);
+          ctx.moveTo(px, py - 3 * dpr); ctx.lineTo(px, py + 3 * dpr); ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.font = `600 ${9 * dpr}px -apple-system, sans-serif`;
+          ctx.textAlign = 'left'; ctx.fillText(lm.name, px + 5 * dpr, py - 2 * dpr);
+        });
+      }
+
+      // Safe Candidate badges (1..5)
+      S.cands.forEach((c, k) => {
+        const p = P(c.i);
+        ctx.beginPath(); ctx.arc(p[0], p[1], 8 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(14, 19, 31, 0.9)'; ctx.fill();
+        ctx.lineWidth = 1.4 * dpr; ctx.strokeStyle = '#38bdf8'; ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = `700 ${9 * dpr}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(k + 1, p[0], p[1]);
+      });
+
+      // Active Site Marker (Golden Glowing Beacon)
+      if (S.site >= 0) {
+        const p = P(S.site), rad = 11 * dpr;
+        ctx.beginPath(); ctx.arc(p[0], p[1], rad + 5 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.22)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, Math.PI * 2);
+        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2.4 * dpr; ctx.stroke();
+        ctx.beginPath(); ctx.arc(p[0], p[1], 3.5 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+      }
+    }
+
+    function sizeCanvas() {
+      const container = $('mapCardContainer');
+      if (!container) return;
+      const cw = container.clientWidth;
+      if (!cw) return;
+      const dpr = window.devicePixelRatio || 1;
+
+      // 2D Map sizing
+      if (cv) {
+        const targetW = Math.round(cw * dpr);
+        if (cv.width !== targetW) {
+          cv.width = cv.height = targetW;
+          paint();
+        }
+        draw();
+      }
+
+      // 3D Globe sizing
+      if (globeRenderer && globeCamera) {
+        globeRenderer.setSize(cw, cw, false);
+        globeCamera.aspect = 1;
+        globeCamera.updateProjectionMatrix();
+      }
+    }
+
+    /* ---------- UI Updates ---------- */
+    const f1 = v => v.toFixed(1);
+    const xy = i => `x ${f1((i % N + 0.5) * S.ext / N)} km, y ${f1(((i / N | 0) + 0.5) * S.ext / N)} km`;
+
+    function updateDetailsCard() {
+      const i = S.site;
+      if (i < 0) return;
+      const ok = okc[i], sc = ok ? Math.round(score[i]) : 0;
+      const sl = slope3[i], il = Math.round(illum[i] * 100), cm = Math.round(comms[i] * 100), ic = dIce[i];
+
+      // Landmark name or coords
+      let siteName = 'Selected Landing Site';
+      LANDMARKS.forEach(lm => {
+        if (Math.abs(lm.x - (i % N)) < 5 && Math.abs(lm.y - ((i / N) | 0)) < 5) siteName = lm.name;
+      });
+
+      if ($('destName')) $('destName').textContent = siteName;
+      if ($('siteCoord')) $('siteCoord').textContent = `Polar stereographic: ${xy(i)} • Elevation: ${H[i] >= 0 ? '+' : ''}${Math.round(H[i])} m`;
+      
+      const badge = $('destBadge');
+      if (badge) {
+        badge.className = ok ? 'status-pill status-pass' : 'status-pill status-fail';
+        badge.textContent = ok ? 'SUITABLE' : 'EXCLUDED';
+      }
+
+      const scoreEl = $('destScore');
+      if (scoreEl) {
+        scoreEl.textContent = sc;
+        scoreEl.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+      }
+
+      const sumEl = $('destSummary');
+      if (sumEl) {
+        if (ok) {
+          sumEl.textContent = 'Nominal landing zone. High solar power, direct Earth line-of-sight, and gentle slope.';
+        } else {
+          const fl = fails(i);
+          sumEl.textContent = `Unsuitable touchdown profile: violates ${fl.join(', ')}.`;
+        }
+      }
+
+      // 4 Telemetry Metrics
+      if ($('valSlope')) $('valSlope').textContent = f1(sl) + '°';
+      if ($('descSlope')) {
+        $('descSlope').textContent = sl <= S.maxSlope ? `Safe (< ${S.maxSlope}.0° Limit)` : `Steep (> ${S.maxSlope}.0° Limit)`;
+        $('descSlope').style.color = sl <= S.maxSlope ? 'var(--ok)' : 'var(--bad)';
+      }
+      if ($('dotSlope')) $('dotSlope').className = sl <= S.maxSlope ? 'metric-dot' : 'metric-dot fail';
+
+      if ($('valSun')) $('valSun').textContent = il + '%';
+      if ($('descSun')) {
+        $('descSun').textContent = il >= S.minSun ? 'Continuous charging' : 'Low illumination';
+        $('descSun').style.color = il >= S.minSun ? 'var(--ok)' : 'var(--bad)';
+      }
+      if ($('dotSun')) $('dotSun').className = il >= S.minSun ? 'metric-dot' : 'metric-dot fail';
+
+      if ($('valEarth')) $('valEarth').textContent = cm + '%';
+      if ($('descEarth')) {
+        $('descEarth').textContent = cm >= S.minComm ? 'Direct line of sight' : 'Terrain occulted';
+        $('descEarth').style.color = cm >= S.minComm ? 'var(--ok)' : 'var(--bad)';
+      }
+      if ($('dotEarth')) $('dotEarth').className = cm >= S.minComm ? 'metric-dot' : 'metric-dot fail';
+
+      if ($('valIce')) $('valIce').textContent = ic >= 99 ? 'N/A' : f1(ic) + ' km';
+      if ($('descIce')) {
+        $('descIce').textContent = ic <= 3.5 ? 'Adjacent to PSR access' : 'Distant from cold trap';
+        $('descIce').style.color = ic <= 3.5 ? 'var(--ice)' : 'var(--muted)';
+      }
+      if ($('dotIce')) $('dotIce').style.background = ic <= 5.0 ? 'var(--ice)' : 'var(--muted)';
+
+      // Update Artemis Safety Threshold Pills
+      const passIcon = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+      const failIcon = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+      const chkSlope = $('chkSlope');
+      if (chkSlope) {
+        const pass = sl <= S.maxSlope;
+        chkSlope.className = pass ? 'safety-pill check-pass' : 'safety-pill check-fail';
+        chkSlope.innerHTML = `${pass ? passIcon : failIcon}<span>Slope &le; 8° (${f1(sl)}°)</span>`;
+      }
+
+      const chkSun = $('chkSun');
+      if (chkSun) {
+        const pass = il >= S.minSun;
+        chkSun.className = pass ? 'safety-pill check-pass' : 'safety-pill check-fail';
+        chkSun.innerHTML = `${pass ? passIcon : failIcon}<span>Sun &ge; 30% (${il}%)</span>`;
+      }
+
+      const chkComms = $('chkComms');
+      if (chkComms) {
+        const pass = cm >= S.minComm;
+        chkComms.className = pass ? 'safety-pill check-pass' : 'safety-pill check-fail';
+        chkComms.innerHTML = `${pass ? passIcon : failIcon}<span>DTE &ge; 20% (${cm}%)</span>`;
+      }
+
+      const chkIce = $('chkIce');
+      if (chkIce) {
+        const pass = ic <= 5.0;
+        chkIce.className = pass ? 'safety-pill check-pass' : 'safety-pill check-fail';
+        chkIce.innerHTML = `${pass ? passIcon : failIcon}<span>Ice &le; 5km (${ic >= 99 ? 'N/A' : f1(ic) + 'km'})</span>`;
+      }
+
+      if ($('globeCoords')) $('globeCoords').textContent = `${siteName} • ${ok ? 'Safe' : 'Excluded'} • Elev ${H[i] >= 0 ? '+' : ''}${Math.round(H[i])}m • Score ${sc}/100`;
+      if ($('hudScore')) $('hudScore').textContent = `Score: ${sc}/100`;
+    }
+
+    function redraw(withPaint) {
+      if (withPaint) paint();
+      draw();
+      updateDetailsCard();
+    }
+
+    function setSite(i, flyCam = true) {
+      S.site = i;
+      S.siteManual = true;
+
+      // Update active preset card styling
+      document.querySelectorAll('.preset-card').forEach(btn => {
+        const key = btn.dataset.site;
+        if (PRESETS[key] === i) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      redraw(false);
+      if (globeInitialized) {
+        updateGlobePins();
+        if (flyCam && globeCamera && globeControls) {
+          const v = gridTo3DVector(i);
+          flyCameraTo(new THREE.Vector3(v.x * 0.45, -2.05, v.z * 0.45 + 0.55), new THREE.Vector3(v.x, v.y, v.z));
+        }
+      }
+    }
+
+    /* ---------- 3D Moon Globe (Three.js WebGL) ---------- */
+    let globeScene = null, globeCamera = null, globeRenderer = null, globeControls = null;
+    let globeMoon = null, globeSunLight = null, globePinsGroup = null;
+    let globeInitialized = false, globeAnimId = null, globeAutoSpin = false;
+    let activePulseRing = null;
+    let camTargetPos = null, camTargetLook = null, isCamFlying = false;
+
+    function flyCameraTo(pos, look) {
+      camTargetPos = pos.clone();
+      camTargetLook = look.clone();
+      isCamFlying = true;
+    }
+
+    function init3DGlobe() {
+      if (globeInitialized || typeof THREE === 'undefined') return;
+      const wrap = $('globeWrap');
+      const canvas = $('globeCanvas');
+      if (!wrap || !canvas) return;
+
+      const w = wrap.clientWidth || 520;
+      globeScene = new THREE.Scene();
+
+      globeCamera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+      globeCamera.position.set(0, -0.2, 3.4);
+
+      globeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+      globeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      globeRenderer.setSize(w, w, false);
+
+      globeControls = new THREE.OrbitControls(globeCamera, canvas);
+      globeControls.enableDamping = true;
+      globeControls.dampingFactor = 0.05;
+      globeControls.minDistance = 1.15;
+      globeControls.maxDistance = 6.0;
+      globeControls.target.set(0, 0, 0);
+
+      // Starfield
+      const starGeo = new THREE.BufferGeometry();
+      const starCount = 600, starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starPos[i] = (Math.random() - 0.5) * 80;
+        starPos[i + 1] = (Math.random() - 0.5) * 80;
+        starPos[i + 2] = (Math.random() - 0.5) * 80;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.18, transparent: true, opacity: 0.7 });
+      globeScene.add(new THREE.Points(starGeo, starMat));
+
+      // Lunar sphere with authentic NASA LRO photo map and LOLA displacement
+      const texLoader = new THREE.TextureLoader();
+      const colorTex = texLoader.load('./textures/moon_color_2k.jpg', () => {
+        if (globeRenderer && globeScene && globeCamera) globeRenderer.render(globeScene, globeCamera);
+      });
+      const bumpTex = texLoader.load('./textures/moon_topo_1k.jpg', () => {
+        if (globeRenderer && globeScene && globeCamera) globeRenderer.render(globeScene, globeCamera);
+      });
+
+      const moonGeo = new THREE.SphereGeometry(1, 96, 96);
+      const moonMat = new THREE.MeshStandardMaterial({
+        map: colorTex,
+        bumpMap: bumpTex,
+        bumpScale: 0.06,
+        roughness: 0.94,
+        metalness: 0.02
+      });
+      globeMoon = new THREE.Mesh(moonGeo, moonMat);
+      globeScene.add(globeMoon);
+
+      // Glowing Cyan 80°S Artemis Boundary Ring
+      const ringLat = -80 * (Math.PI / 180);
+      const ringY = Math.sin(ringLat);
+      const ringR = Math.cos(ringLat);
+      const ringPts = [];
+      for (let a = 0; a <= 64; a++) {
+        const rad = (a / 64) * Math.PI * 2;
+        ringPts.push(new THREE.Vector3(Math.cos(rad) * ringR * 1.002, ringY * 1.002, Math.sin(rad) * ringR * 1.002));
+      }
+      const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts);
+      const ringMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85, linewidth: 2 });
+      globeScene.add(new THREE.Line(ringGeo, ringMat));
+
+      // Directional Sun Light (Warm solar illumination casting deep crater shadows)
+      globeSunLight = new THREE.DirectionalLight(0xfffaed, 3.4);
+      globeScene.add(globeSunLight);
+
+      // Realistic Earthshine and ambient space lighting (keeps craters visible in shadow)
+      const ambLight = new THREE.AmbientLight(0x283548, 0.75);
+      globeScene.add(ambLight);
+
+      const earthLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
+      earthLight.position.set(-15, -5, 15);
+      globeScene.add(earthLight);
+
+      // 3D Pins
+      globePinsGroup = new THREE.Group();
+      globeScene.add(globePinsGroup);
+      updateGlobePins();
+
+      // Click / Raycaster to select pins and terrain in 3D
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let downPt = { x: 0, y: 0, time: 0 };
+
+      canvas.addEventListener('pointerdown', e => {
+        downPt = { x: e.clientX, y: e.clientY, time: Date.now() };
+        isCamFlying = false;
+      });
+
+      canvas.addEventListener('pointerup', e => {
+        const dist = Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y);
+        const dt = Date.now() - downPt.time;
+        if (dist > 6 || dt > 400) return; // Ignore drag / orbit motions
+
+        const r = canvas.getBoundingClientRect();
+        mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        mouse.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+        raycaster.setFromCamera(mouse, globeCamera);
+
+        // 1. Raycast against candidate pins
+        const pinHits = raycaster.intersectObjects(globePinsGroup.children, true);
+        if (pinHits.length > 0) {
+          let obj = pinHits[0].object;
+          while (obj.parent && obj.parent !== globePinsGroup) obj = obj.parent;
+          if (obj.userData && obj.userData.cellIdx !== undefined) {
+            setSite(obj.userData.cellIdx, false);
+            return;
+          }
+        }
+
+        // 2. Raycast against lunar globe surface
+        if (globeMoon) {
+          const moonHits = raycaster.intersectObject(globeMoon);
+          if (moonHits.length > 0) {
+            const hit = moonHits[0].point;
+            // Lunar South Pole is near y = -1.0
+            if (hit.y < -0.80) {
+              const sc = 0.14 / (N / 2);
+              const gx = clamp(Math.round((hit.x / sc) + N / 2), 0, N - 1);
+              const gy = clamp(Math.round((hit.z / sc) + N / 2), 0, N - 1);
+              setSite(gy * N + gx, false);
+            } else {
+              // Smoothly transition view down to South Polar exploration zone
+              flyCameraTo(new THREE.Vector3(0, -2.1, 0.55), new THREE.Vector3(0, -0.92, 0));
+              if ($('globeCoords')) $('globeCoords').textContent = 'South Pole landing zone (80°S–90°S)';
+            }
+          }
+        }
+      });
+
+      globeInitialized = true;
+      animate3DGlobe();
+    }
+
+    function gridTo3DVector(idx) {
+      const gx = idx % N, gy = (idx / N) | 0;
+      const sc = 0.14 / (N / 2);
+      const dx = (gx - N / 2) * sc;
+      const dz = (gy - N / 2) * sc;
+      const dy = -Math.sqrt(Math.max(0.01, 1 - dx * dx - dz * dz));
+      return new THREE.Vector3(dx, dy, dz);
+    }
+
+    function createSitePin(idx, colorHex, isActive) {
+      const pinGroup = new THREE.Group();
+      pinGroup.userData = { cellIdx: idx };
+      const v = gridTo3DVector(idx);
+      const norm = v.clone().normalize();
+
+      if (isActive) {
+        // Active selected site beacon
+        const h = 0.09;
+        const poleGeo = new THREE.CylinderGeometry(0.003, 0.003, h, 8);
+        poleGeo.translate(0, h / 2, 0);
+        const poleMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
+        pole.position.copy(v);
+        pinGroup.add(pole);
+
+        const headGeo = new THREE.SphereGeometry(0.016, 14, 14);
+        const headMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.copy(v.clone().add(norm.clone().multiplyScalar(h)));
+        pinGroup.add(head);
+
+        // Pulsating Ground Target Ring
+        const ringGeo = new THREE.RingGeometry(0.016, 0.022, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0xf59e0b,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.9
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+        ring.position.copy(v.clone().multiplyScalar(1.003));
+        pinGroup.add(ring);
+        activePulseRing = ring;
+
+        // Outer Reticle Target Circle
+        const outerGeo = new THREE.RingGeometry(0.032, 0.035, 32);
+        const outerMat = new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.45
+        });
+        const outer = new THREE.Mesh(outerGeo, outerMat);
+        outer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+        outer.position.copy(v.clone().multiplyScalar(1.002));
+        pinGroup.add(outer);
+
+      } else {
+        // Inactive candidate landmark pin
+        const h = 0.045;
+        const poleGeo = new THREE.CylinderGeometry(0.002, 0.002, h, 8);
+        poleGeo.translate(0, h / 2, 0);
+        const poleMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.75 });
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
+        pole.position.copy(v);
+        pinGroup.add(pole);
+
+        const headGeo = new THREE.SphereGeometry(0.009, 10, 10);
+        const headMat = new THREE.MeshBasicMaterial({ color: colorHex });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.copy(v.clone().add(norm.clone().multiplyScalar(h)));
+        pinGroup.add(head);
+      }
+
+      return pinGroup;
+    }
+
+    function updateGlobePins() {
+      if (!globePinsGroup) return;
+      while (globePinsGroup.children.length) globePinsGroup.remove(globePinsGroup.children[0]);
+      activePulseRing = null;
+
+      // Inactive candidate landmarks
+      [
+        { idx: PRESETS.cr, col: 0x38bdf8 },
+        { idx: PRESETS.mm, col: 0x38bdf8 },
+        { idx: PRESETS.pel, col: 0x38bdf8 },
+        { idx: PRESETS.nob, col: 0x38bdf8 }
+      ].forEach(p => {
+        if (p.idx !== S.site) {
+          globePinsGroup.add(createSitePin(p.idx, p.col, false));
+        }
+      });
+
+      // Active site pin
+      if (S.site >= 0) {
+        globePinsGroup.add(createSitePin(S.site, 0xf59e0b, true));
+      }
+    }
+
+    function updateGlobeSun() {
+      if (!globeSunLight) return;
+      const totalDays = S.mDay + S.slip;
+      const sunAzRad = (totalDays / 29.53059) * 2 * Math.PI;
+      const sunDist = 30;
+      globeSunLight.position.set(Math.cos(sunAzRad + 0.6) * sunDist, 4.0, Math.sin(sunAzRad + 0.6) * sunDist);
+    }
+
+    function animate3DGlobe() {
+      globeAnimId = requestAnimationFrame(animate3DGlobe);
+      if (S.view !== '3d') return;
+
+      // Smooth camera transition
+      if (isCamFlying && camTargetPos && camTargetLook && globeCamera && globeControls) {
+        globeCamera.position.lerp(camTargetPos, 0.08);
+        globeControls.target.lerp(camTargetLook, 0.08);
+        if (globeCamera.position.distanceTo(camTargetPos) < 0.005 && globeControls.target.distanceTo(camTargetLook) < 0.005) {
+          globeCamera.position.copy(camTargetPos);
+          globeControls.target.copy(camTargetLook);
+          isCamFlying = false;
+        }
+      }
+
+      // Pulsing active landing reticle
+      if (activePulseRing) {
+        const s = 1.0 + 0.16 * Math.sin(Date.now() * 0.006);
+        activePulseRing.scale.set(s, s, s);
+      }
+
+      if (globeControls) globeControls.update();
+      updateGlobeSun();
+      if (globeRenderer && globeScene && globeCamera) {
+        globeRenderer.render(globeScene, globeCamera);
+      }
+    }
+
+    /* ---------- Event Listeners ---------- */
+    // View Switcher (3D Moon vs 2D Map)
+    on('viewMode', 'click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      S.view = b.dataset.view;
+      document.querySelectorAll('#viewMode button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      if (S.view === '3d') {
+        if ($('map')) $('map').style.display = 'none';
+        if ($('mapHud')) $('mapHud').style.display = 'none';
+        if ($('layerBar')) $('layerBar').style.display = 'none';
+        if ($('globeWrap')) $('globeWrap').style.display = 'block';
+        if ($('globeControlsBar')) $('globeControlsBar').style.display = 'flex';
+        if ($('mapCardTitle')) $('mapCardTitle').textContent = 'Interactive 3D Moon Globe';
+        init3DGlobe();
+        sizeCanvas();
+      } else {
+        if ($('globeWrap')) $('globeWrap').style.display = 'none';
+        if ($('globeControlsBar')) $('globeControlsBar').style.display = 'none';
+        if ($('map')) $('map').style.display = 'block';
+        if ($('mapHud')) $('mapHud').style.display = 'flex';
+        if ($('layerBar')) $('layerBar').style.display = 'flex';
+        if ($('mapCardTitle')) $('mapCardTitle').textContent = '2D Moon Surface Map';
+        sizeCanvas();
+        redraw(true);
+      }
+    });
+
+    on('btnFocusPole', 'click', () => {
+      flyCameraTo(new THREE.Vector3(0, -2.1, 0.55), new THREE.Vector3(0, -0.92, 0));
+    });
+
+    on('btnWholeMoon', 'click', () => {
+      flyCameraTo(new THREE.Vector3(0, -0.2, 3.4), new THREE.Vector3(0, 0, 0));
+    });
+
+    on('btnAutoSpin', 'click', () => {
+      globeAutoSpin = !globeAutoSpin;
+      if (globeControls) {
+        globeControls.autoRotate = globeAutoSpin;
+        globeControls.autoRotateSpeed = 0.8;
+      }
+      $('btnAutoSpin').classList.toggle('btn-primary', globeAutoSpin);
+    });
+
+    on('btnZoomIn', 'click', () => {
+      if (globeCamera) globeCamera.position.multiplyScalar(0.85);
+    });
+    on('btnZoomOut', 'click', () => {
+      if (globeCamera) globeCamera.position.multiplyScalar(1.15);
+    });
+
+    // 2D Layers toggle
+    on('layers', 'click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      S.layer = b.dataset.layer;
+      document.querySelectorAll('#layers button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      redraw(true);
+    });
+
+    on('showNames', 'change', e => {
+      S.showNames = e.target.checked;
+      redraw(false);
+    });
+
+    // Presets Click
+    on('presets', 'click', e => {
+      const b = e.target.closest('.preset-card'); if (!b) return;
+      document.querySelectorAll('.preset-card').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const key = b.dataset.site;
+      if (PRESETS[key] !== undefined) {
+        setSite(PRESETS[key]);
+      }
+    });
+
+    // 2D Map Click to select site
+    if (cv) {
+      cv.addEventListener('pointerdown', e => {
+        const r = cv.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width * N;
+        const py = (e.clientY - r.top) / r.height * N;
+        const x = clamp(Math.round(px), 0, N - 1), y = clamp(Math.round(py), 0, N - 1);
+        setSite(y * N + x);
+      });
+
+      cv.addEventListener('pointermove', e => {
+        const r = cv.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width * N;
+        const py = (e.clientY - r.top) / r.height * N;
+        const x = clamp(Math.round(px), 0, N - 1), y = clamp(Math.round(py), 0, N - 1);
+        const i = y * N + x;
+        if ($('mapHudCoords')) {
+          $('mapHudCoords').textContent = `Point: ${xy(i)} • Elev: ${H[i] >= 0 ? '+' : ''}${Math.round(H[i])} m • Slope: ${f1(slope3[i])}°`;
+        }
+      });
+    }
+
+    // Sliders
+    function updateTimelineOutcome() {
+      const total = S.mDay + S.slip;
+      const el = $('timelineOutcome');
+      if (!el) return;
+      const sunAz = ((total % 29.53059) / 29.53059) * 360;
+      el.innerHTML = `Solar Azimuth: ${sunAz.toFixed(1)}° • Elevation: +1.5° • Synodic Day ${total.toFixed(1)} / 29.5`;
+    }
+
+    on('mDay', 'input', e => {
+      S.mDay = +e.target.value;
+      if ($('o-mDay')) $('o-mDay').textContent = 'Day ' + S.mDay.toFixed(1);
+      updateTimelineOutcome();
+      redraw(S.layer === 'relief');
+    });
+
+    on('slip', 'input', e => {
+      S.slip = +e.target.value;
+      if ($('o-slip')) $('o-slip').textContent = '+' + S.slip + ' days';
+      updateTimelineOutcome();
+      redraw(S.layer === 'relief');
+    });
+
+    document.querySelectorAll('.quick-days button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const d = +btn.dataset.day;
+        if ($('mDay')) $('mDay').value = d;
+        if ($('o-mDay')) $('o-mDay').textContent = 'Day ' + d.toFixed(1);
+        S.mDay = d;
+        updateTimelineOutcome();
+        redraw(S.layer === 'relief');
+      });
+    });
+
+    // Play Sun Orbit Loop
+    on('btnPlayOrbit', 'click', () => {
+      S.isPlaying = !S.isPlaying;
+      if (S.isPlaying) {
+        if ($('labelPlay')) $('labelPlay').textContent = 'Pause Orbit';
+        if ($('iconPlay')) $('iconPlay').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+        S.animTimer = setInterval(() => {
+          let nextDay = S.mDay + 0.25;
+          if (nextDay > 29.5) nextDay = 0;
+          S.mDay = nextDay;
+          if ($('mDay')) $('mDay').value = nextDay;
+          if ($('o-mDay')) $('o-mDay').textContent = 'Day ' + nextDay.toFixed(1);
+          updateTimelineOutcome();
+          redraw(S.layer === 'relief');
+        }, 130);
+      } else {
+        if ($('labelPlay')) $('labelPlay').textContent = 'Play Sun Orbit';
+        if ($('iconPlay')) $('iconPlay').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+        if (S.animTimer) clearInterval(S.animTimer);
+      }
+    });
+
+    /* ---------- Telemetry Briefing & Export ---------- */
+    function generateMissionBriefingData() {
+      const i = S.site;
+      const ok = okc[i], sc = ok ? Math.round(score[i]) : 0;
+      const sl = slope3[i], il = Math.round(illum[i] * 100), cm = Math.round(comms[i] * 100), ic = dIce[i];
+      let siteName = 'Custom Touchdown Point';
+      LANDMARKS.forEach(lm => {
+        if (Math.abs(lm.x - (i % N)) < 5 && Math.abs(lm.y - ((i / N) | 0)) < 5) siteName = lm.name;
+      });
+      const totalDays = S.mDay + S.slip;
+      const sunAz = ((totalDays % 29.53059) / 29.53059) * 360;
+
+      return {
+        mission: 'NASA Artemis Lunar Landing Site Assessment',
+        system: 'MoonWindow Navigator v2.0',
+        timestamp: new Date().toISOString(),
+        site: {
+          name: siteName,
+          index: i,
+          coordinates: {
+            polarX_km: +f1((i % N + 0.5) * S.ext / N),
+            polarY_km: +f1(((i / N | 0) + 0.5) * S.ext / N),
+            elevation_m: Math.round(H[i])
+          },
+          status: ok ? 'SUITABLE / NOMINAL' : 'EXCLUDED / VIOLATES SAFETY LIMITS',
+          suitabilityScore: sc,
+          metrics: {
+            groundSlope_deg: +f1(sl),
+            groundSlopeLimit_deg: S.maxSlope,
+            solarIllumination_pct: il,
+            solarIlluminationMin_pct: S.minSun,
+            earthDTE_pct: cm,
+            earthDTEMin_pct: S.minComm,
+            distanceToWaterIcePSR_km: ic >= 99 ? null : +f1(ic)
+          },
+          orbitSimulation: {
+            synodicDay: +totalDays.toFixed(1),
+            launchSlipDays: S.slip,
+            solarAzimuth_deg: +sunAz.toFixed(1),
+            solarElevation_deg: S.sunEl
+          }
+        }
+      };
+    }
+
+    function openBriefingModal() {
+      const data = generateMissionBriefingData();
+      const s = data.site;
+      const content = `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <b style="font-size:16px;color:#fff">${s.name}</b>
+            <span class="status-pill ${s.status.includes('SUITABLE') ? 'status-pass' : 'status-fail'}">${s.status.split(' ')[0]}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">Coordinates: x ${s.coordinates.polarX_km} km, y ${s.coordinates.polarY_km} km • Elevation: ${s.coordinates.elevation_m >= 0 ? '+' : ''}${s.coordinates.elevation_m} m</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Suitability Index: <b style="color:${s.status.includes('SUITABLE') ? 'var(--ok)' : 'var(--bad)'}">${s.suitabilityScore} / 100</b></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:10px;border-radius:6px">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700">Slope Profile</div>
+            <div style="font-size:15px;font-weight:700;color:#fff;margin:2px 0">${s.metrics.groundSlope_deg}°</div>
+            <div style="font-size:11px;color:${s.metrics.groundSlope_deg <= 8 ? 'var(--ok)' : 'var(--bad)'}">Limit: &le; 8.0°</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:10px;border-radius:6px">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700">Solar Power</div>
+            <div style="font-size:15px;font-weight:700;color:#fff;margin:2px 0">${s.metrics.solarIllumination_pct}%</div>
+            <div style="font-size:11px;color:${s.metrics.solarIllumination_pct >= 30 ? 'var(--ok)' : 'var(--bad)'}">Threshold: &ge; 30%</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:10px;border-radius:6px">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700">Earth Direct Line of Sight</div>
+            <div style="font-size:15px;font-weight:700;color:#fff;margin:2px 0">${s.metrics.earthDTE_pct}%</div>
+            <div style="font-size:11px;color:${s.metrics.earthDTE_pct >= 20 ? 'var(--ok)' : 'var(--bad)'}">Threshold: &ge; 20%</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:10px;border-radius:6px">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;font-weight:700">Water Ice (PSR Proximity)</div>
+            <div style="font-size:15px;font-weight:700;color:#fff;margin:2px 0">${s.metrics.distanceToWaterIcePSR_km ? s.metrics.distanceToWaterIcePSR_km + ' km' : 'None detected'}</div>
+            <div style="font-size:11px;color:var(--ice)">Cold Trap Access Limit: &le; 5.0 km</div>
+          </div>
+        </div>
+
+        <div style="font-size:11.5px;color:var(--muted);line-height:1.5">
+          Simulated MET: <b>Day ${s.orbitSimulation.synodicDay}</b> of Synodic Month • Solar Azimuth: <b>${s.orbitSimulation.solarAzimuth_deg}°</b> • Launch Slip: <b>+${s.orbitSimulation.launchSlipDays}d</b>.
+        </div>
+      `;
+      $('briefingContent').innerHTML = content;
+      $('modalBriefing').classList.add('open');
+    }
+
+    function downloadMissionJson() {
+      const data = generateMissionBriefingData();
+      const str = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
+      const a = document.createElement('a');
+      a.setAttribute('href', str);
+      a.setAttribute('download', `MoonWindow_${data.site.name.replace(/[^a-zA-Z0-9]/g, '_')}_Telemetry.json`);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    on('btnShortcuts', 'click', () => $('modalShortcuts').classList.add('open'));
+    on('btnCloseShortcuts', 'click', () => $('modalShortcuts').classList.remove('open'));
+    on('btnGotItShortcuts', 'click', () => $('modalShortcuts').classList.remove('open'));
+
+    on('btnExportBriefing', 'click', openBriefingModal);
+    on('btnCloseBriefing', 'click', () => $('modalBriefing').classList.remove('open'));
+    on('btnDownloadJson', 'click', downloadMissionJson);
+    on('btnPrintBriefing', 'click', () => window.print());
+
+    if ($('modalShortcuts')) {
+      $('modalShortcuts').addEventListener('click', e => {
+        if (e.target === $('modalShortcuts')) $('modalShortcuts').classList.remove('open');
+      });
+    }
+    if ($('modalBriefing')) {
+      $('modalBriefing').addEventListener('click', e => {
+        if (e.target === $('modalBriefing')) $('modalBriefing').classList.remove('open');
+      });
+    }
+
+    /* ---------- Presentation Hotkeys Listener ---------- */
+    window.addEventListener('keydown', e => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const btn = $('btnPlayOrbit');
+        if (btn) btn.click();
+      } else if (e.key === '1') {
+        setSite(PRESETS.cr, true);
+      } else if (e.key === '2') {
+        setSite(PRESETS.mm, true);
+      } else if (e.key === '3') {
+        setSite(PRESETS.pel, true);
+      } else if (e.key === '4') {
+        setSite(PRESETS.nob, true);
+      } else if (e.key.toLowerCase() === 'm') {
+        const nextView = S.view === '3d' ? '2d' : '3d';
+        const btn = document.querySelector(`#viewMode button[data-view="${nextView}"]`);
+        if (btn) btn.click();
+      } else if (e.key.toLowerCase() === 'f') {
+        const btn = $('btnFocusPole');
+        if (btn) btn.click();
+      } else if (e.key.toLowerCase() === 'g') {
+        const btn = $('btnWholeMoon');
+        if (btn) btn.click();
+      } else if (e.key === '+' || e.key === '=') {
+        const btn = $('btnZoomIn');
+        if (btn) btn.click();
+      } else if (e.key === '-' || e.key === '_') {
+        const btn = $('btnZoomOut');
+        if (btn) btn.click();
+      } else if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        $('modalShortcuts').classList.toggle('open');
+      } else if (e.key === 'Escape') {
+        $('modalShortcuts').classList.remove('open');
+        $('modalBriefing').classList.remove('open');
+      }
+    });
+
+    /* ---------- Init ---------- */
+    genTerrain();
+    normalDerivs();
+    horizonFields();
+    iceFields();
+    rescore();
+    paint();
+
+    if (typeof ResizeObserver !== 'undefined' && $('mapCardContainer')) {
+      new ResizeObserver(sizeCanvas).observe($('mapCardContainer'));
+    }
+    window.addEventListener('resize', sizeCanvas);
+    sizeCanvas();
+
+    init3DGlobe();
+
+    if (window.location.hash === '#2d') {
+      const btn2d = document.querySelector('#viewMode button[data-view="2d"]');
+      if (btn2d) btn2d.click();
+    }
+
+    updateDetailsCard();
+    window.__moonwindow = { S, N, H, score, slope3, illum, comms, dIce };
+  })();
+  </script>
+</body>
+</html>
