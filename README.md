@@ -7,19 +7,34 @@
 
 ## 🚀 Live Demo & Getting Started
 
-The application is completely self-contained with **zero external build steps or server dependencies required**.
+The application is completely self-contained with **zero external server dependencies required**.
 
+### Running Locally
 ```bash
 # 1. Navigate to the project directory
 cd /home/jaafar/Dev/MoonWindow
 
-# 2. Run with any local server or Vite dev server:
+# 2. Run with Vite dev/preview server:
 npm run dev
-# or
-npx serve .
+# or for built production preview:
+npm run preview
 ```
-
 Visit `http://localhost:3000/` to test in real-time.
+
+### Deploying to GitHub Pages
+MoonWindow includes an automated GitHub Actions deployment workflow (`.github/workflows/deploy.yml`):
+```bash
+# 1. Add your GitHub repository remote
+git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+
+# 2. Push to GitHub
+git push -u origin main
+```
+In your GitHub Repository:
+1. Go to **Settings** > **Pages**.
+2. Under **Build and deployment** > **Source**, choose **GitHub Actions**.
+3. Your site will automatically build and deploy live at `https://<your-username>.github.io/<your-repo-name>/`.
+4. The technical whitepaper and documentation are accessible at `/DOCUMENTATION.html` and `/MoonWindow_Technical_Documentation.pdf`.
 
 ---
 
